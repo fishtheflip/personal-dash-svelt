@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@source "../node_modules/flowbite-svelte/dist";
+
+@theme {
+  --font-sans: "Inter", "SF Pro Display", system-ui, sans-serif;
+  --color-ink: #121512;
+  --color-lime: #c6f25d;
+  --color-paper: #f4f3ed;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: #0d0f0e; color: #f5f6f1; font-family: var(--font-sans); }
+button, input { font: inherit; }
+button { cursor: pointer; }
