@@ -5,7 +5,7 @@
     Textarea
   } from 'flowbite-svelte';
   import {
-    CalendarDays, ChevronLeft, ChevronRight, CircleDot, Plus, Search, Trash2
+    CalendarDays, ChevronLeft, ChevronRight, CircleDot, Link, Plus, Search, Trash2
   } from '@lucide/svelte';
 
   interface Note {
@@ -99,6 +99,9 @@
       </SidebarItem>
       <SidebarItem href="/calendar" label="Календарь" active>
         {#snippet icon()}<CalendarDays size={17}/>{/snippet}
+      </SidebarItem>
+      <SidebarItem href="/links" label="Ссылки">
+        {#snippet icon()}<Link size={17}/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
   </Sidebar>

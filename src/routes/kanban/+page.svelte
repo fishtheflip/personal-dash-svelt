@@ -5,28 +5,34 @@
     SidebarItem
   } from 'flowbite-svelte';
   import {
-    ArrowLeft, ArrowRight, CalendarDays, CircleDot, Command, GripVertical, MoreHorizontal,
-    Plus, Search, Sparkles, Users
+    ArrowLeft, ArrowRight, CalendarDays, CircleDot, Command, GripVertical, Link,
+    MoreHorizontal,
+    Plus, Search, Sparkles
   } from '@lucide/svelte';
   import type { Goal, Priority, Status } from '$lib/types';
 
   const storageKey = 'northstar-kanban-goals';
+  const spacesKey = 'northstar-kanban-spaces';
+  const defaultSpaces = ['Разработка', 'Обучение', 'Личные', 'Breaking', 'Art'];
   const defaultGoals: Goal[] = [
-    { id: 1, title: 'Проверить авторизацию DP / DP-Test Web', area: 'DP Testing', status: 'progress', priority: 'high', progress: 40 },
-    { id: 2, title: 'Проверить авторизацию DP / DP-Test WebView', area: 'DP Testing', status: 'backlog', priority: 'high', progress: 0 },
-    { id: 3, title: 'Проверить авторизацию DP / DP-Test Mobile', area: 'DP Testing', status: 'backlog', priority: 'high', progress: 0 },
-    { id: 4, title: 'Записать найденные багфиксы', area: 'Багфиксы', status: 'backlog', priority: 'medium', progress: 0 },
+    { id: 1, title: 'Проверить авторизацию DP / DP-Test Web', area: 'Разработка', status: 'progress', priority: 'high', progress: 40 },
+    { id: 2, title: 'Проверить авторизацию DP / DP-Test WebView', area: 'Разработка', status: 'backlog', priority: 'high', progress: 0 },
+    { id: 3, title: 'Проверить авторизацию DP / DP-Test Mobile', area: 'Разработка', status: 'backlog', priority: 'high', progress: 0 },
+    { id: 4, title: 'Записать найденные багфиксы', area: 'Разработка', status: 'backlog', priority: 'medium', progress: 0 },
     { id: 5, title: 'Реализовать logout', area: 'Разработка', status: 'progress', priority: 'high', progress: 30 },
-    { id: 6, title: 'Проверить DP в Lighthouse', area: 'DP Testing', status: 'backlog', priority: 'medium', progress: 0 }
+    { id: 6, title: 'Проверить DP в Lighthouse', area: 'Обучение', status: 'backlog', priority: 'medium', progress: 0 }
   ];
 
   let goals = $state<Goal[]>(loadGoals());
+  let spaces = $state<string[]>(loadSpaces());
   let query = $state('');
   let area = $state('Все');
   let priority = $state<'all' | Priority>('all');
   let showCreate = $state(false);
   let newTitle = $state('');
-  let newArea = $state('DP Testing');
+  let newArea = $state('Разработка');
+  let newPriority = $state<Priority>('medium');
+  let customSpace = $state('');
   let draggedId = $state<number | null>(null);
   let dragOverStatus = $state<Status | null>(null);
 
@@ -35,20 +41,21 @@
     { id: 'progress', label: 'В работе', subtitle: 'Активный фокус', color: '#84cc16' },
     { id: 'done', label: 'Готово', subtitle: 'Завершено', color: '#38bdf8' }
   ];
-  const areas = ['Все', 'DP Testing', 'Разработка', 'Багфиксы'];
-  const areaOptions = areas.slice(1).map((item) => ({ name: item, value: item }));
+  let areas = $derived(['Все', ...spaces]);
+  let areaOptions = $derived(spaces.map((item) => ({ name: item, value: item })));
   const priorityOptions = [
     { name: 'Все приоритеты', value: 'all' },
     { name: 'Высокий', value: 'high' },
     { name: 'Средний', value: 'medium' },
     { name: 'Низкий', value: 'low' }
   ];
+  const createPriorityOptions = priorityOptions.slice(1);
   const badgeColor: Record<Priority, 'red' | 'yellow' | 'gray'> = {
     high: 'red', medium: 'yellow', low: 'gray'
   };
 
   let filtered = $derived(goals.filter((goal) =>
-    `${goal.title} ${goal.area}`.toLowerCase().includes(query.toLowerCase())
+    `${goal.title} ${goal.area} ${goal.priority}`.toLowerCase().includes(query.toLowerCase())
     && (area === 'Все' || goal.area === area)
     && (priority === 'all' || goal.priority === priority)
   ));
@@ -57,14 +64,62 @@
     if (!browser) return defaultGoals;
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) as Goal[] : defaultGoals;
+      return stored ? (JSON.parse(stored) as Goal[]).map(normalizeGoal) : defaultGoals;
     } catch {
       return defaultGoals;
     }
   }
 
+  function loadSpaces(): string[] {
+    if (!browser) return defaultSpaces;
+    try {
+      const stored = localStorage.getItem(spacesKey);
+      return stored ? mergeSpaces(JSON.parse(stored) as string[]) : mergeSpaces(defaultGoals.map((goal) => goal.area));
+    } catch {
+      return defaultSpaces;
+    }
+  }
+
   function saveGoals() {
     if (browser) localStorage.setItem(storageKey, JSON.stringify(goals));
+  }
+
+  function saveSpaces() {
+    if (browser) localStorage.setItem(spacesKey, JSON.stringify(spaces));
+  }
+
+  function mergeSpaces(items: string[]) {
+    return Array.from(new Set([...defaultSpaces, ...items.map((item) => item.trim()).filter(Boolean)]));
+  }
+
+  function normalizeGoal(goal: Goal): Goal {
+    const legacyPriority: Record<string, Priority> = {
+      Разработка: 'high',
+      Обучение: 'medium',
+      Личные: 'medium',
+      Брейк: 'low',
+      Творчество: 'medium'
+    };
+    const legacyArea: Record<string, string> = {
+      'DP Testing': 'Разработка',
+      'Багфиксы': 'Разработка',
+      'Брейк': 'Breaking',
+      'Творчество': 'Art'
+    };
+    return {
+      ...goal,
+      area: legacyArea[goal.area] ?? goal.area,
+      priority: legacyPriority[goal.priority] ?? goal.priority
+    };
+  }
+
+  function addSpace() {
+    const value = customSpace.trim();
+    if (!value || spaces.includes(value)) return;
+    spaces = [...spaces, value];
+    newArea = value;
+    customSpace = '';
+    saveSpaces();
   }
 
   function move(goal: Goal, direction: -1 | 1) {
@@ -77,7 +132,7 @@
     if (!newTitle.trim()) return;
     goals = [...goals, {
       id: Date.now(), title: newTitle.trim(), area: newArea, status: 'backlog',
-      priority: 'medium', progress: 0
+      priority: newPriority, progress: 0
     }];
     saveGoals();
     newTitle = '';
@@ -121,6 +176,9 @@
       <SidebarItem href="/calendar" label="Календарь">
         {#snippet icon()}<CalendarDays size={17}/>{/snippet}
       </SidebarItem>
+      <SidebarItem href="/links" label="Ссылки">
+        {#snippet icon()}<Link size={17}/>{/snippet}
+      </SidebarItem>
     </SidebarGroup>
   </Sidebar>
 
@@ -128,7 +186,6 @@
     <Card class="sticky top-0 z-20 w-full max-w-none rounded-none border-x-0 border-t-0 border-gray-800 bg-gray-950/95 p-3 backdrop-blur lg:px-8">
       <div class="flex items-center gap-3">
         <div class="w-full max-w-md flex-1"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 text-white" placeholder="Поиск на доске...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
-        <Button outline color="dark" class="ml-auto hidden border-gray-700 sm:flex"><Users size={15}/> Поделиться</Button>
         <Button color="green" onclick={() => showCreate = true}><Plus size={16}/> Новая цель</Button>
       </div>
     </Card>
@@ -190,6 +247,14 @@
     <p class="mb-5 text-sm text-gray-500">Новая задача появится в запланированных.</p>
     <label class="block text-sm text-gray-400">Название<Input bind:value={newTitle} class="mt-2 border-gray-700 bg-gray-800 text-white" placeholder="Например, проверить авторизацию"/></label>
     <label class="mt-4 block text-sm text-gray-400">Пространство<Select bind:value={newArea} items={areaOptions} class="mt-2 border-gray-700 bg-gray-800 text-white"/></label>
+    <label class="mt-4 block text-sm text-gray-400">Приоритет<Select bind:value={newPriority} items={createPriorityOptions} class="mt-2 border-gray-700 bg-gray-800 text-white"/></label>
+    <div class="mt-4 rounded-lg border border-gray-700 bg-gray-800/60 p-3">
+      <div class="text-sm text-gray-400">Добавить пространство</div>
+      <div class="mt-2 flex gap-2">
+        <Input bind:value={customSpace} class="border-gray-700 bg-gray-900 text-white" placeholder="Например, Здоровье"/>
+        <Button type="button" color="dark" onclick={addSpace}><Plus size={15}/> Добавить</Button>
+      </div>
+    </div>
     <Button type="submit" color="green" class="mt-5 w-full justify-center"><Plus size={16}/> Создать цель</Button>
   </form>
 </Modal>
