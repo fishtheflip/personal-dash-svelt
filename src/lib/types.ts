@@ -1,12 +1,28 @@
 export type Status = 'backlog' | 'progress' | 'done';
 export type Priority = 'high' | 'medium' | 'low';
+export type EntityId = string | number;
 
 export interface Goal {
-  id: number;
+  id: EntityId;
   title: string;
   area: string;
   status: Status;
   priority: Priority;
   due?: string;
   progress: number;
+}
+
+export interface CalendarNote {
+  id: EntityId;
+  date: string;
+  title: string;
+  text: string;
+}
+
+export interface UsefulLink {
+  id: EntityId;
+  title: string;
+  url: string;
+  category: string;
+  note: string;
 }

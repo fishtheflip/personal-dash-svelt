@@ -1,15 +1,20 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { base } from '$app/paths';
+  import { onMount } from 'svelte';
   import {
     Badge, Button, ButtonGroup, Card, Input, Modal, Select, Sidebar, SidebarGroup,
     SidebarItem
   } from 'flowbite-svelte';
   import {
     ArrowLeft, ArrowRight, CalendarDays, CircleDot, Command, GripVertical, Link,
-    MoreHorizontal,
-    Plus, Search, Sparkles
+    Plus, Search, Sparkles, Trash2
   } from '@lucide/svelte';
   import type { Goal, Priority, Status } from '$lib/types';
+  import {
+    createGoal as insertGoal, createGoals, createSpace, createSpaces, deleteGoal as removeGoal,
+    getGoals, getSpaces, goalInput, updateGoalStatus
+  } from '$lib/data';
 
   const storageKey = 'northstar-kanban-goals';
   const spacesKey = 'northstar-kanban-spaces';
@@ -23,8 +28,10 @@
     { id: 6, title: 'Проверить DP в Lighthouse', area: 'Обучение', status: 'backlog', priority: 'medium', progress: 0 }
   ];
 
-  let goals = $state<Goal[]>(loadGoals());
-  let spaces = $state<string[]>(loadSpaces());
+  let goals = $state<Goal[]>([]);
+  let spaces = $state<string[]>(defaultSpaces);
+  let loading = $state(true);
+  let errorMessage = $state('');
   let query = $state('');
   let area = $state('Все');
   let priority = $state<'all' | Priority>('all');
@@ -33,8 +40,11 @@
   let newArea = $state('Разработка');
   let newPriority = $state<Priority>('medium');
   let customSpace = $state('');
-  let draggedId = $state<number | null>(null);
+  let draggedId = $state<Goal['id'] | null>(null);
   let dragOverStatus = $state<Status | null>(null);
+  let goalToDelete = $state<Goal | null>(null);
+  let showDelete = $state(false);
+  let deleting = $state(false);
 
   const columns: { id: Status; label: string; subtitle: string; color: string }[] = [
     { id: 'backlog', label: 'Запланировано', subtitle: 'Следующие задачи', color: '#9ca3af' },
@@ -80,14 +90,6 @@
     }
   }
 
-  function saveGoals() {
-    if (browser) localStorage.setItem(storageKey, JSON.stringify(goals));
-  }
-
-  function saveSpaces() {
-    if (browser) localStorage.setItem(spacesKey, JSON.stringify(spaces));
-  }
-
   function mergeSpaces(items: string[]) {
     return Array.from(new Set([...defaultSpaces, ...items.map((item) => item.trim()).filter(Boolean)]));
   }
@@ -113,30 +115,77 @@
     };
   }
 
-  function addSpace() {
+  onMount(async () => {
+    try {
+      const [storedGoals, storedSpaces] = await Promise.all([getGoals(), getSpaces()]);
+      goals = storedGoals.length ? storedGoals : await createGoals(loadGoals().map(goalInput));
+      const initialSpaces = mergeSpaces(storedSpaces.length ? storedSpaces : loadSpaces());
+      if (!storedSpaces.length) await createSpaces(initialSpaces);
+      spaces = initialSpaces;
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось загрузить данные';
+    } finally {
+      loading = false;
+    }
+  });
+
+  async function addSpace() {
     const value = customSpace.trim();
     if (!value || spaces.includes(value)) return;
-    spaces = [...spaces, value];
-    newArea = value;
-    customSpace = '';
-    saveSpaces();
+    try {
+      await createSpace(value);
+      spaces = [...spaces, value];
+      newArea = value;
+      customSpace = '';
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось добавить пространство';
+    }
+  }
+
+  async function setGoalStatus(goal: Goal, status: Status) {
+    const previous = goal.status;
+    goal.status = status;
+    try {
+      await updateGoalStatus(goal.id, status);
+    } catch (error) {
+      goal.status = previous;
+      errorMessage = error instanceof Error ? error.message : 'Не удалось переместить цель';
+    }
   }
 
   function move(goal: Goal, direction: -1 | 1) {
     const order: Status[] = ['backlog', 'progress', 'done'];
-    goal.status = order[Math.max(0, Math.min(2, order.indexOf(goal.status) + direction))];
-    saveGoals();
+    void setGoalStatus(goal, order[Math.max(0, Math.min(2, order.indexOf(goal.status) + direction))]);
   }
 
-  function createGoal() {
+  async function createGoal() {
     if (!newTitle.trim()) return;
-    goals = [...goals, {
-      id: Date.now(), title: newTitle.trim(), area: newArea, status: 'backlog',
-      priority: newPriority, progress: 0
-    }];
-    saveGoals();
-    newTitle = '';
-    showCreate = false;
+    try {
+      const created = await insertGoal({
+        title: newTitle.trim(), area: newArea, status: 'backlog', priority: newPriority
+      });
+      goals = [...goals, created];
+      newTitle = '';
+      showCreate = false;
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось создать цель';
+    }
+  }
+
+  async function deleteGoal() {
+    if (!goalToDelete || deleting) return;
+    deleting = true;
+    errorMessage = '';
+    try {
+      await removeGoal(goalToDelete.id);
+      goals = goals.filter((goal) => goal.id !== goalToDelete?.id);
+      goalToDelete = null;
+      showDelete = false;
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось удалить цель';
+    } finally {
+      deleting = false;
+    }
   }
 
   function startDrag(event: DragEvent, goal: Goal) {
@@ -147,12 +196,9 @@
 
   function dropGoal(event: DragEvent, status: Status) {
     event.preventDefault();
-    const id = draggedId ?? Number(event.dataTransfer?.getData('text/plain'));
-    const goal = goals.find((item) => item.id === id);
-    if (goal) {
-      goal.status = status;
-      saveGoals();
-    }
+    const id = draggedId ?? event.dataTransfer?.getData('text/plain');
+    const goal = goals.find((item) => String(item.id) === String(id));
+    if (goal) void setGoalStatus(goal, status);
     draggedId = null;
     dragOverStatus = null;
   }
@@ -169,14 +215,14 @@
     nonActiveClass="text-gray-400 hover:bg-gray-800 hover:text-white"
   >
     <SidebarGroup class="mt-16">
-      <SidebarItem href="/kanban" label="Канбан" active>
+      <SidebarItem href={`${base}/kanban`} label="Канбан" active>
         {#snippet icon()}<CircleDot size={17}/>{/snippet}
         {#snippet subtext()}<Badge color="green">{goals.length}</Badge>{/snippet}
       </SidebarItem>
-      <SidebarItem href="/calendar" label="Календарь">
+      <SidebarItem href={`${base}/calendar`} label="Календарь">
         {#snippet icon()}<CalendarDays size={17}/>{/snippet}
       </SidebarItem>
-      <SidebarItem href="/links" label="Ссылки">
+      <SidebarItem href={`${base}/links`} label="Ссылки">
         {#snippet icon()}<Link size={17}/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
@@ -185,12 +231,13 @@
   <main class="lg:ml-64">
     <Card class="sticky top-0 z-20 w-full max-w-none rounded-none border-x-0 border-t-0 border-gray-800 bg-gray-950/95 p-3 backdrop-blur lg:px-8">
       <div class="flex items-center gap-3">
-        <div class="w-full max-w-md flex-1"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 text-white" placeholder="Поиск на доске...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
+        <div class="w-full max-w-md flex-1"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 pl-11 text-white" leftClass="pointer-events-none w-10 justify-center text-gray-400" placeholder="Поиск на доске...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
         <Button color="green" onclick={() => showCreate = true}><Plus size={16}/> Новая цель</Button>
       </div>
     </Card>
 
     <div class="p-5 lg:p-8">
+      {#if errorMessage}<div class="mb-5 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">{errorMessage}</div>{/if}
       <div class="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div><div class="mb-2 flex items-center gap-2 text-xs font-medium text-lime-400"><Sparkles size={14}/> Рабочее пространство</div><h1 class="text-4xl font-bold tracking-tight">Канбан целей</h1><p class="mt-2 text-sm text-gray-500">Веди задачи от намерения до результата.</p></div>
         <div class="flex flex-wrap gap-2">
@@ -209,6 +256,9 @@
         {/each}
       </div>
 
+      {#if loading}
+        <div class="rounded-lg border border-gray-800 bg-gray-900 p-10 text-center text-sm text-gray-500">Загрузка целей...</div>
+      {:else}
       <div class="grid min-w-[900px] grid-cols-3 gap-4">
         {#each columns as column}
           <Card
@@ -228,7 +278,7 @@
                   ondragend={() => { draggedId = null; dragOverStatus = null; }}
                   class="cursor-grab border-gray-700 bg-gray-800 p-3 hover:border-gray-600 {draggedId === goal.id ? 'opacity-35' : ''}"
                 >
-                  <div class="mb-2 flex items-center gap-2"><GripVertical size={14} class="text-gray-600"/><Badge color={badgeColor[goal.priority]}>{goal.priority}</Badge><Button class="ml-auto" size="xs" color="dark" aria-label="Меню цели"><MoreHorizontal size={14}/></Button></div>
+                  <div class="mb-2 flex items-center gap-2"><GripVertical size={14} class="text-gray-600"/><Badge color={badgeColor[goal.priority]}>{goal.priority}</Badge><Button class="ml-auto" size="xs" color="dark" aria-label={`Удалить цель: ${goal.title}`} title="Удалить цель" onclick={() => { goalToDelete = goal; showDelete = true; }}><Trash2 size={13}/></Button></div>
                   <h3 class="text-sm font-semibold leading-snug">{goal.title}</h3>
                   <div class="mt-3 flex items-center justify-between"><span class="flex items-center gap-1.5 text-[10px] text-gray-500"><Command size={11}/>{goal.area}</span><ButtonGroup><Button size="xs" color="dark" disabled={goal.status === 'backlog'} onclick={() => move(goal, -1)} aria-label="Переместить назад"><ArrowLeft size={12}/></Button><Button size="xs" color="dark" disabled={goal.status === 'done'} onclick={() => move(goal, 1)} aria-label="Переместить вперед"><ArrowRight size={12}/></Button></ButtonGroup></div>
                 </Card>
@@ -238,6 +288,7 @@
           </Card>
         {/each}
       </div>
+      {/if}
     </div>
   </main>
 </div>
@@ -257,4 +308,16 @@
     </div>
     <Button type="submit" color="green" class="mt-5 w-full justify-center"><Plus size={16}/> Создать цель</Button>
   </form>
+</Modal>
+
+<Modal bind:open={showDelete} title="Удалить цель?" size="sm" class="border border-gray-700 bg-gray-900 text-white" headerClass="border-b border-gray-700 bg-gray-900 text-white" bodyClass="bg-gray-900" closeBtnClass="text-gray-400 hover:bg-gray-800">
+  <div class="text-center">
+    <div class="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-red-950 text-red-400"><Trash2 size={22}/></div>
+    <p class="text-sm text-gray-400">Цель будет удалена без возможности восстановления.</p>
+    {#if goalToDelete}<p class="mt-3 font-semibold">{goalToDelete.title}</p>{/if}
+    <div class="mt-6 flex justify-center gap-3">
+      <Button color="dark" onclick={() => { goalToDelete = null; showDelete = false; }} disabled={deleting}>Отмена</Button>
+      <Button color="red" onclick={deleteGoal} disabled={deleting}><Trash2 size={15}/> {deleting ? 'Удаляем...' : 'Удалить'}</Button>
+    </div>
+  </div>
 </Modal>

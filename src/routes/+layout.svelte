@@ -1,6 +1,9 @@
 <script lang="ts">
   import '../styles.css';
+  import AuthGate from '$lib/AuthGate.svelte';
   let { children } = $props();
 </script>
 
-{@render children()}
+<AuthGate>
+  {@render children()}
+</AuthGate>

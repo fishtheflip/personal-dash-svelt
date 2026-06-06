@@ -1,5 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { base } from '$app/paths';
+  import { onMount } from 'svelte';
   import {
     Badge, Button, Card, Input, Modal, Sidebar, SidebarGroup, SidebarItem,
     Textarea
@@ -7,12 +9,12 @@
   import {
     CalendarDays, ChevronLeft, ChevronRight, CircleDot, Link, Plus, Search, Trash2
   } from '@lucide/svelte';
+  import type { CalendarNote } from '$lib/types';
+  import {
+    createCalendarNote, createCalendarNotes, deleteCalendarNote, getCalendarNotes
+  } from '$lib/data';
 
-  interface Note {
-    id: number;
-    title: string;
-    text: string;
-  }
+  type Note = Omit<CalendarNote, 'date'>;
 
   const storageKey = 'goal-planner-calendar-notes';
   const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -23,7 +25,9 @@
 
   let current = $state(new Date());
   let selectedKey = $state(dateKey(new Date()));
-  let notes = $state<Record<string, Note[]>>(loadNotes());
+  let notes = $state<Record<string, Note[]>>({});
+  let loading = $state(true);
+  let errorMessage = $state('');
   let showCreate = $state(false);
   let title = $state('');
   let text = $state('');
@@ -61,26 +65,50 @@
     }
   }
 
-  function saveNotes() {
-    if (browser) localStorage.setItem(storageKey, JSON.stringify(notes));
-  }
-
   function changeMonth(amount: number) {
     current = new Date(current.getFullYear(), current.getMonth() + amount, 1);
   }
 
-  function addNote() {
+  onMount(async () => {
+    try {
+      let stored = await getCalendarNotes();
+      if (!stored.length) {
+        const local = loadNotes();
+        stored = await createCalendarNotes(Object.entries(local).flatMap(([date, items]) =>
+          items.map((item) => ({ date, title: item.title, text: item.text }))
+        ));
+      }
+      notes = stored.reduce<Record<string, Note[]>>((result, item) => {
+        result[item.date] = [...(result[item.date] ?? []), { id: item.id, title: item.title, text: item.text }];
+        return result;
+      }, {});
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось загрузить заметки';
+    } finally {
+      loading = false;
+    }
+  });
+
+  async function addNote() {
     if (!title.trim()) return;
-    notes[selectedKey] = [...(notes[selectedKey] ?? []), { id: Date.now(), title: title.trim(), text: text.trim() }];
-    saveNotes();
-    title = '';
-    text = '';
-    showCreate = false;
+    try {
+      const created = await createCalendarNote({ date: selectedKey, title: title.trim(), text: text.trim() });
+      notes[selectedKey] = [...(notes[selectedKey] ?? []), { id: created.id, title: created.title, text: created.text }];
+      title = '';
+      text = '';
+      showCreate = false;
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось добавить заметку';
+    }
   }
 
-  function deleteNote(id: number) {
-    notes[selectedKey] = (notes[selectedKey] ?? []).filter((note) => note.id !== id);
-    saveNotes();
+  async function deleteNote(id: Note['id']) {
+    try {
+      await deleteCalendarNote(id);
+      notes[selectedKey] = (notes[selectedKey] ?? []).filter((note) => note.id !== id);
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось удалить заметку';
+    }
   }
 
   function selectedDateLabel() {
@@ -94,13 +122,13 @@
 <div class="min-h-screen bg-gray-950 text-white">
   <Sidebar alwaysOpen class="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-gray-800 bg-gray-900 lg:block" divClass="h-full overflow-y-auto bg-gray-900 px-3 py-4" activeClass="bg-lime-400/15 text-lime-300" nonActiveClass="text-gray-400 hover:bg-gray-800 hover:text-white">
     <SidebarGroup class="mt-16">
-      <SidebarItem href="/kanban" label="Канбан">
+      <SidebarItem href={`${base}/kanban`} label="Канбан">
         {#snippet icon()}<CircleDot size={17}/>{/snippet}
       </SidebarItem>
-      <SidebarItem href="/calendar" label="Календарь" active>
+      <SidebarItem href={`${base}/calendar`} label="Календарь" active>
         {#snippet icon()}<CalendarDays size={17}/>{/snippet}
       </SidebarItem>
-      <SidebarItem href="/links" label="Ссылки">
+      <SidebarItem href={`${base}/links`} label="Ссылки">
         {#snippet icon()}<Link size={17}/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
@@ -109,12 +137,13 @@
   <main class="lg:ml-64">
     <Card class="sticky top-0 z-20 w-full max-w-none rounded-none border-x-0 border-t-0 border-gray-800 bg-gray-950/95 p-3 backdrop-blur lg:px-8">
       <div class="flex items-center gap-3">
-        <div class="w-full max-w-md"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 text-white" placeholder="Поиск заметок...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
+        <div class="w-full max-w-md"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 pl-11 text-white" leftClass="pointer-events-none w-10 justify-center text-gray-400" placeholder="Поиск заметок...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
         <Button color="green" class="ml-auto" onclick={() => showCreate = true}><Plus size={16}/> Новая заметка</Button>
       </div>
     </Card>
 
     <div class="p-5 lg:p-8">
+      {#if errorMessage}<div class="mb-5 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">{errorMessage}</div>{/if}
       <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div><div class="mb-2 flex items-center gap-2 text-xs font-medium text-lime-400"><CalendarDays size={14}/> Планирование по датам</div><h1 class="text-4xl font-bold tracking-tight">Календарь</h1><p class="mt-2 text-sm text-gray-500">Выбери день и оставь заметку.</p></div>
         <div class="flex items-center gap-2"><Button color="dark" size="sm" onclick={() => changeMonth(-1)} aria-label="Предыдущий месяц"><ChevronLeft size={16}/></Button><strong class="min-w-40 text-center">{months[current.getMonth()]} {current.getFullYear()}</strong><Button color="dark" size="sm" onclick={() => changeMonth(1)} aria-label="Следующий месяц"><ChevronRight size={16}/></Button></div>
@@ -123,7 +152,7 @@
       <div class="grid gap-5 xl:grid-cols-[1fr_340px]">
         <Card class="max-w-none border-gray-800 bg-gray-900 p-3">
           <div class="grid grid-cols-7">{#each weekdays as weekday}<div class="p-2 text-center text-xs font-semibold uppercase text-gray-500">{weekday}</div>{/each}</div>
-          <div class="grid grid-cols-7 overflow-hidden rounded-lg border border-gray-800">
+          <div class="grid grid-cols-7 overflow-hidden rounded-lg border border-gray-800 {loading ? 'opacity-50' : ''}">
             {#each days as day}
               <button onclick={() => selectedKey = day.key} class="relative min-h-24 border-b border-r border-gray-800 p-2 text-left transition hover:bg-gray-800 {selectedKey === day.key ? 'bg-lime-400/10 ring-1 ring-inset ring-lime-400' : 'bg-gray-900'} {day.currentMonth ? 'text-white' : 'text-gray-600'}">
                 <span class="text-xs">{day.date.getDate()}</span>

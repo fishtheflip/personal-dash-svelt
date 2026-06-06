@@ -1,5 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { base } from '$app/paths';
+  import { onMount } from 'svelte';
   import {
     Badge, Button, Card, Input, Modal, Select, Sidebar, SidebarGroup, SidebarItem,
     Textarea
@@ -7,14 +9,10 @@
   import {
     CalendarDays, CircleDot, ExternalLink, Link, Plus, Search, Trash2
   } from '@lucide/svelte';
-
-  interface UsefulLink {
-    id: number;
-    title: string;
-    url: string;
-    category: string;
-    note: string;
-  }
+  import type { UsefulLink } from '$lib/types';
+  import {
+    createUsefulLink, createUsefulLinks, deleteUsefulLink, getUsefulLinks
+  } from '$lib/data';
 
   const storageKey = 'goal-planner-useful-links';
   const categories = ['Все', 'DP', 'QA', 'Docs', 'Tools', 'Learning'];
@@ -25,7 +23,9 @@
     { id: 3, title: 'Svelte Docs', url: 'https://svelte.dev/docs', category: 'Docs', note: 'Документация по Svelte и SvelteKit.' }
   ];
 
-  let links = $state<UsefulLink[]>(loadLinks());
+  let links = $state<UsefulLink[]>([]);
+  let loading = $state(true);
+  let errorMessage = $state('');
   let query = $state('');
   let category = $state('Все');
   let showCreate = $state(false);
@@ -49,31 +49,46 @@
     }
   }
 
-  function saveLinks() {
-    if (browser) localStorage.setItem(storageKey, JSON.stringify(links));
-  }
-
   function normalizeUrl(value: string) {
     if (!value.trim()) return '';
     return /^https?:\/\//.test(value) ? value : `https://${value}`;
   }
 
-  function addLink() {
+  onMount(async () => {
+    try {
+      const stored = await getUsefulLinks();
+      links = stored.length ? stored : await createUsefulLinks(loadLinks().map(({ title, url, category, note }) => ({ title, url, category, note })));
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось загрузить ссылки';
+    } finally {
+      loading = false;
+    }
+  });
+
+  async function addLink() {
     const normalized = normalizeUrl(url);
     if (!title.trim() || !normalized) return;
-    links = [...links, {
-      id: Date.now(), title: title.trim(), url: normalized, category: linkCategory, note: note.trim()
-    }];
-    saveLinks();
-    title = '';
-    url = '';
-    note = '';
-    showCreate = false;
+    try {
+      const created = await createUsefulLink({
+        title: title.trim(), url: normalized, category: linkCategory, note: note.trim()
+      });
+      links = [...links, created];
+      title = '';
+      url = '';
+      note = '';
+      showCreate = false;
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось добавить ссылку';
+    }
   }
 
-  function deleteLink(id: number) {
-    links = links.filter((item) => item.id !== id);
-    saveLinks();
+  async function deleteLink(id: UsefulLink['id']) {
+    try {
+      await deleteUsefulLink(id);
+      links = links.filter((item) => item.id !== id);
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Не удалось удалить ссылку';
+    }
   }
 </script>
 
@@ -82,13 +97,13 @@
 <div class="min-h-screen bg-gray-950 text-white">
   <Sidebar alwaysOpen class="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-gray-800 bg-gray-900 lg:block" divClass="h-full overflow-y-auto bg-gray-900 px-3 py-4" activeClass="bg-lime-400/15 text-lime-300" nonActiveClass="text-gray-400 hover:bg-gray-800 hover:text-white">
     <SidebarGroup class="mt-16">
-      <SidebarItem href="/kanban" label="Канбан">
+      <SidebarItem href={`${base}/kanban`} label="Канбан">
         {#snippet icon()}<CircleDot size={17}/>{/snippet}
       </SidebarItem>
-      <SidebarItem href="/calendar" label="Календарь">
+      <SidebarItem href={`${base}/calendar`} label="Календарь">
         {#snippet icon()}<CalendarDays size={17}/>{/snippet}
       </SidebarItem>
-      <SidebarItem href="/links" label="Ссылки" active>
+      <SidebarItem href={`${base}/links`} label="Ссылки" active>
         {#snippet icon()}<Link size={17}/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
@@ -97,18 +112,19 @@
   <main class="lg:ml-64">
     <Card class="sticky top-0 z-20 w-full max-w-none rounded-none border-x-0 border-t-0 border-gray-800 bg-gray-950/95 p-3 backdrop-blur lg:px-8">
       <div class="flex items-center gap-3">
-        <div class="w-full max-w-md"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 text-white" placeholder="Поиск ссылок...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
+        <div class="w-full max-w-md"><Input bind:value={query} divClass="w-full" class="w-full border-gray-700 bg-gray-900 pl-11 text-white" leftClass="pointer-events-none w-10 justify-center text-gray-400" placeholder="Поиск ссылок...">{#snippet left()}<Search size={15}/>{/snippet}</Input></div>
         <Button color="green" class="ml-auto" onclick={() => showCreate = true}><Plus size={16}/> Новая ссылка</Button>
       </div>
     </Card>
 
     <div class="p-5 lg:p-8">
+      {#if errorMessage}<div class="mb-5 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">{errorMessage}</div>{/if}
       <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div><div class="mb-2 flex items-center gap-2 text-xs font-medium text-lime-400"><Link size={14}/> Быстрый доступ</div><h1 class="text-4xl font-bold tracking-tight">Полезные ссылки</h1><p class="mt-2 text-sm text-gray-500">Окружения, документация, QA-инструменты и материалы.</p></div>
         <Select bind:value={category} items={categories.map((item) => ({ name: item, value: item }))} class="w-48 border-gray-700 bg-gray-900 text-white"/>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 {loading ? 'opacity-50' : ''}">
         {#each filtered as item}
           <Card class="max-w-none border-gray-800 bg-gray-900 p-4">
             <div class="mb-3 flex items-start gap-3">
