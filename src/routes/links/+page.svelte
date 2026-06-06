@@ -7,7 +7,7 @@
     Textarea
   } from 'flowbite-svelte';
   import {
-    CalendarDays, CircleDot, ExternalLink, Link, Plus, Search, Trash2
+    CalendarDays, CircleDot, ExternalLink, Link, Plus, Search, TimerReset, Trash2
   } from '@lucide/svelte';
   import type { UsefulLink } from '$lib/types';
   import {
@@ -105,6 +105,9 @@
       </SidebarItem>
       <SidebarItem href={`${base}/links`} label="Ссылки" active>
         {#snippet icon()}<Link size={17}/>{/snippet}
+      </SidebarItem>
+      <SidebarItem href={`${base}/pomodoro`} label="Pomodoro">
+        {#snippet icon()}<TimerReset size={17}/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
   </Sidebar>

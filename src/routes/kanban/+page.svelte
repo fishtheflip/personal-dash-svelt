@@ -8,7 +8,7 @@
   } from 'flowbite-svelte';
   import {
     ArrowLeft, ArrowRight, CalendarDays, CircleDot, Command, GripVertical, Link,
-    Plus, Search, Sparkles, Trash2
+    Plus, Search, Sparkles, TimerReset, Trash2
   } from '@lucide/svelte';
   import type { Goal, Priority, Status } from '$lib/types';
   import {
@@ -224,6 +224,9 @@
       </SidebarItem>
       <SidebarItem href={`${base}/links`} label="Ссылки">
         {#snippet icon()}<Link size={17}/>{/snippet}
+      </SidebarItem>
+      <SidebarItem href={`${base}/pomodoro`} label="Pomodoro">
+        {#snippet icon()}<TimerReset size={17}/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
   </Sidebar>
