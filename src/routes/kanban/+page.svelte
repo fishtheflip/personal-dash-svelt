@@ -1,15 +1,13 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import {
-    Badge, Button, ButtonGroup, Card, Input, Modal, Select, Sidebar, SidebarGroup,
-    SidebarItem
+    Badge, Button, ButtonGroup, Card, Input, Modal, Select
   } from 'flowbite-svelte';
   import {
-    ArrowLeft, ArrowRight, CalendarDays, CircleDot, Command, GripVertical, Link,
-    Plus, Search, Sparkles, TimerReset, Trash2
+    ArrowLeft, ArrowRight, Command, GripVertical, Plus, Search, Sparkles, Trash2
   } from '@lucide/svelte';
+  import AppNavigation from '$lib/AppNavigation.svelte';
   import type { Goal, Priority, Status } from '$lib/types';
   import {
     createGoal as insertGoal, createGoals, createSpace, createSpaces, deleteGoal as removeGoal,
@@ -42,6 +40,7 @@
   let customSpace = $state('');
   let draggedId = $state<Goal['id'] | null>(null);
   let dragOverStatus = $state<Status | null>(null);
+  let savingIds = $state<Set<Goal['id']>>(new Set());
   let goalToDelete = $state<Goal | null>(null);
   let showDelete = $state(false);
   let deleting = $state(false);
@@ -143,13 +142,17 @@
   }
 
   async function setGoalStatus(goal: Goal, status: Status) {
+    if (goal.status === status || savingIds.has(goal.id)) return;
     const previous = goal.status;
-    goal.status = status;
+    savingIds = new Set([...savingIds, goal.id]);
+    goals = goals.map((item) => item.id === goal.id ? { ...item, status } : item);
     try {
       await updateGoalStatus(goal.id, status);
     } catch (error) {
-      goal.status = previous;
+      goals = goals.map((item) => item.id === goal.id ? { ...item, status: previous } : item);
       errorMessage = error instanceof Error ? error.message : 'Не удалось переместить цель';
+    } finally {
+      savingIds = new Set([...savingIds].filter((id) => id !== goal.id));
     }
   }
 
@@ -194,11 +197,11 @@
     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
   }
 
-  function dropGoal(event: DragEvent, status: Status) {
+  async function dropGoal(event: DragEvent, status: Status) {
     event.preventDefault();
     const id = draggedId ?? event.dataTransfer?.getData('text/plain');
     const goal = goals.find((item) => String(item.id) === String(id));
-    if (goal) void setGoalStatus(goal, status);
+    if (goal) await setGoalStatus(goal, status);
     draggedId = null;
     dragOverStatus = null;
   }
@@ -207,29 +210,7 @@
 <svelte:head><title>Канбан — Northstar</title></svelte:head>
 
 <div class="min-h-screen bg-gray-950 text-white">
-  <Sidebar
-    alwaysOpen
-    class="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-gray-800 bg-gray-900 lg:block"
-    divClass="h-full overflow-y-auto bg-gray-900 px-3 py-4"
-    activeClass="bg-lime-400/15 text-lime-300"
-    nonActiveClass="text-gray-400 hover:bg-gray-800 hover:text-white"
-  >
-    <SidebarGroup class="mt-16">
-      <SidebarItem href={`${base}/kanban`} label="Канбан" active>
-        {#snippet icon()}<CircleDot size={17}/>{/snippet}
-        {#snippet subtext()}<Badge color="green">{goals.length}</Badge>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/calendar`} label="Календарь">
-        {#snippet icon()}<CalendarDays size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/links`} label="Ссылки">
-        {#snippet icon()}<Link size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/pomodoro`} label="Pomodoro">
-        {#snippet icon()}<TimerReset size={17}/>{/snippet}
-      </SidebarItem>
-    </SidebarGroup>
-  </Sidebar>
+  <AppNavigation active="kanban" kanbanCount={goals.length}/>
 
   <main class="lg:ml-64">
     <Card class="sticky top-0 z-20 w-full max-w-none rounded-none border-x-0 border-t-0 border-gray-800 bg-gray-950/95 p-3 backdrop-blur lg:px-8">
@@ -267,23 +248,24 @@
           <Card
             role="list"
             aria-label={column.label}
+            ondragenter={(event: DragEvent) => { event.preventDefault(); dragOverStatus = column.id; }}
             ondragover={(event: DragEvent) => { event.preventDefault(); dragOverStatus = column.id; }}
             ondragleave={(event: DragEvent) => { if (event.currentTarget === event.target) dragOverStatus = null; }}
-            ondrop={(event: DragEvent) => dropGoal(event, column.id)}
+            ondrop={(event: DragEvent) => { void dropGoal(event, column.id); }}
             class="min-h-[620px] border-gray-800 bg-gray-900/70 p-3 {dragOverStatus === column.id ? 'ring-2 ring-lime-400' : ''}"
           >
             <div class="mb-3 flex items-center gap-2 px-1"><span class="size-2 rounded-full" style={`background:${column.color}`}></span><strong class="text-xs uppercase tracking-wider text-gray-300">{column.label}</strong><Badge class="ml-auto" color="gray">{filtered.filter(g => g.status === column.id).length}</Badge></div>
             <div class="space-y-2.5">
               {#each filtered.filter(g => g.status === column.id) as goal}
                 <Card
-                  draggable="true"
+                  draggable={!savingIds.has(goal.id)}
                   ondragstart={(event: DragEvent) => startDrag(event, goal)}
                   ondragend={() => { draggedId = null; dragOverStatus = null; }}
-                  class="cursor-grab border-gray-700 bg-gray-800 p-3 hover:border-gray-600 {draggedId === goal.id ? 'opacity-35' : ''}"
+                  class="cursor-grab border-gray-700 bg-gray-800 p-3 hover:border-gray-600 {draggedId === goal.id ? 'opacity-35' : ''} {savingIds.has(goal.id) ? 'pointer-events-none opacity-60' : ''}"
                 >
                   <div class="mb-2 flex items-center gap-2"><GripVertical size={14} class="text-gray-600"/><Badge color={badgeColor[goal.priority]}>{goal.priority}</Badge><Button class="ml-auto" size="xs" color="dark" aria-label={`Удалить цель: ${goal.title}`} title="Удалить цель" onclick={() => { goalToDelete = goal; showDelete = true; }}><Trash2 size={13}/></Button></div>
                   <h3 class="text-sm font-semibold leading-snug">{goal.title}</h3>
-                  <div class="mt-3 flex items-center justify-between"><span class="flex items-center gap-1.5 text-[10px] text-gray-500"><Command size={11}/>{goal.area}</span><ButtonGroup><Button size="xs" color="dark" disabled={goal.status === 'backlog'} onclick={() => move(goal, -1)} aria-label="Переместить назад"><ArrowLeft size={12}/></Button><Button size="xs" color="dark" disabled={goal.status === 'done'} onclick={() => move(goal, 1)} aria-label="Переместить вперед"><ArrowRight size={12}/></Button></ButtonGroup></div>
+                  <div class="mt-3 flex items-center justify-between"><span class="flex items-center gap-1.5 text-[10px] text-gray-500"><Command size={11}/>{savingIds.has(goal.id) ? 'Сохраняем...' : goal.area}</span><ButtonGroup><Button size="xs" color="dark" disabled={goal.status === 'backlog' || savingIds.has(goal.id)} onclick={() => move(goal, -1)} aria-label="Переместить назад"><ArrowLeft size={12}/></Button><Button size="xs" color="dark" disabled={goal.status === 'done' || savingIds.has(goal.id)} onclick={() => move(goal, 1)} aria-label="Переместить вперед"><ArrowRight size={12}/></Button></ButtonGroup></div>
                 </Card>
               {/each}
               <Button outline color="dark" class="w-full border-dashed border-gray-700" onclick={() => showCreate = true}><Plus size={14}/> Добавить цель</Button>

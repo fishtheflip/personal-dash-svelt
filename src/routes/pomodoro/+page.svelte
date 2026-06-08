@@ -1,12 +1,11 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { base } from '$app/paths';
   import { onMount } from 'svelte';
-  import { Badge, Button, ButtonGroup, Card, Sidebar, SidebarGroup, SidebarItem } from 'flowbite-svelte';
+  import { Button, ButtonGroup, Card } from 'flowbite-svelte';
   import {
-    CalendarDays, CircleDot, Coffee, Link, Music2, Pause, Play,
-    RotateCcw, TimerReset, Volume2, VolumeX, Waves, Zap
+    Coffee, Music2, Pause, Play, RotateCcw, Volume2, VolumeX, Waves, Zap
   } from '@lucide/svelte';
+  import AppNavigation from '$lib/AppNavigation.svelte';
   import {
     playAmbience, setAmbienceVolume, stopAmbience, type AmbienceSound
   } from '$lib/ambience';
@@ -167,23 +166,7 @@
 <svelte:head><title>{ready ? `${timeLabel} — Pomodoro` : 'Pomodoro'}</title></svelte:head>
 
 <div class="min-h-screen bg-gray-950 text-white">
-  <Sidebar alwaysOpen class="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-gray-800 bg-gray-900 lg:block" divClass="h-full overflow-y-auto bg-gray-900 px-3 py-4" activeClass="bg-lime-400/15 text-lime-300" nonActiveClass="text-gray-400 hover:bg-gray-800 hover:text-white">
-    <SidebarGroup class="mt-16">
-      <SidebarItem href={`${base}/kanban`} label="Канбан">
-        {#snippet icon()}<CircleDot size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/calendar`} label="Календарь">
-        {#snippet icon()}<CalendarDays size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/links`} label="Ссылки">
-        {#snippet icon()}<Link size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/pomodoro`} label="Pomodoro" active>
-        {#snippet icon()}<TimerReset size={17}/>{/snippet}
-        {#snippet subtext()}<Badge color="green">{timer.completed}</Badge>{/snippet}
-      </SidebarItem>
-    </SidebarGroup>
-  </Sidebar>
+  <AppNavigation active="pomodoro" pomodoroCount={timer.completed}/>
 
   <main class="lg:ml-64">
     <div class="mx-auto max-w-5xl p-5 lg:p-8">

@@ -1,14 +1,13 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import {
-    Badge, Button, Card, Input, Modal, Sidebar, SidebarGroup, SidebarItem,
-    Textarea
+    Badge, Button, Card, Input, Modal, Textarea
   } from 'flowbite-svelte';
   import {
-    CalendarDays, ChevronLeft, ChevronRight, CircleDot, Link, Plus, Search, TimerReset, Trash2
+    CalendarDays, ChevronLeft, ChevronRight, Plus, Search, Trash2
   } from '@lucide/svelte';
+  import AppNavigation from '$lib/AppNavigation.svelte';
   import type { CalendarNote } from '$lib/types';
   import {
     createCalendarNote, createCalendarNotes, deleteCalendarNote, getCalendarNotes
@@ -120,22 +119,7 @@
 <svelte:head><title>Календарь задач</title></svelte:head>
 
 <div class="min-h-screen bg-gray-950 text-white">
-  <Sidebar alwaysOpen class="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-gray-800 bg-gray-900 lg:block" divClass="h-full overflow-y-auto bg-gray-900 px-3 py-4" activeClass="bg-lime-400/15 text-lime-300" nonActiveClass="text-gray-400 hover:bg-gray-800 hover:text-white">
-    <SidebarGroup class="mt-16">
-      <SidebarItem href={`${base}/kanban`} label="Канбан">
-        {#snippet icon()}<CircleDot size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/calendar`} label="Календарь" active>
-        {#snippet icon()}<CalendarDays size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/links`} label="Ссылки">
-        {#snippet icon()}<Link size={17}/>{/snippet}
-      </SidebarItem>
-      <SidebarItem href={`${base}/pomodoro`} label="Pomodoro">
-        {#snippet icon()}<TimerReset size={17}/>{/snippet}
-      </SidebarItem>
-    </SidebarGroup>
-  </Sidebar>
+  <AppNavigation active="calendar"/>
 
   <main class="lg:ml-64">
     <Card class="sticky top-0 z-20 w-full max-w-none rounded-none border-x-0 border-t-0 border-gray-800 bg-gray-950/95 p-3 backdrop-blur lg:px-8">
