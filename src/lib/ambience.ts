@@ -1,4 +1,4 @@
-export type AmbienceSound = 'lofi' | 'rain' | 'brown';
+export type AmbienceSound = 'lofi' | 'brown';
 
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -18,16 +18,16 @@ function createNoiseBuffer(ctx: AudioContext, brown = false) {
   return buffer;
 }
 
-function addNoise(ctx: AudioContext, destination: AudioNode, type: AmbienceSound) {
+function addNoise(ctx: AudioContext, destination: AudioNode, type: 'brown') {
   const source = ctx.createBufferSource();
   const filter = ctx.createBiquadFilter();
   const gain = ctx.createGain();
 
-  source.buffer = createNoiseBuffer(ctx, type !== 'rain');
+  source.buffer = createNoiseBuffer(ctx, true);
   source.loop = true;
-  filter.type = type === 'rain' ? 'highpass' : 'lowpass';
-  filter.frequency.value = type === 'rain' ? 1800 : 550;
-  gain.gain.value = type === 'rain' ? 0.2 : 0.09;
+  filter.type = 'lowpass';
+  filter.frequency.value = 550;
+  gain.gain.value = 0.09;
   source.connect(filter).connect(gain).connect(destination);
   source.start();
 }

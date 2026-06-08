@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { Badge, Button, ButtonGroup, Card, Sidebar, SidebarGroup, SidebarItem } from 'flowbite-svelte';
   import {
-    CalendarDays, CircleDot, CloudRain, Coffee, Link, Music2, Pause, Play,
+    CalendarDays, CircleDot, Coffee, Link, Music2, Pause, Play,
     RotateCcw, TimerReset, Volume2, VolumeX, Waves, Zap
   } from '@lucide/svelte';
   import {
@@ -52,6 +52,7 @@
 
   onMount(() => {
     timer = loadState();
+    if ((timer.ambience as string) === 'rain') timer.ambience = 'lofi';
     timer.ambiencePlaying = false;
     ready = true;
     tick();
@@ -258,9 +259,8 @@
           </Button>
         </div>
 
-        <div class="mt-5 grid gap-3 md:grid-cols-3">
+        <div class="mt-5 grid gap-3 md:grid-cols-2">
           <Button color={timer.ambience === 'lofi' ? 'green' : 'dark'} class="justify-start" onclick={() => selectAmbience('lofi')}><Music2 size={16}/> Lo-fi аккорд</Button>
-          <Button color={timer.ambience === 'rain' ? 'green' : 'dark'} class="justify-start" onclick={() => selectAmbience('rain')}><CloudRain size={16}/> Дождь</Button>
           <Button color={timer.ambience === 'brown' ? 'green' : 'dark'} class="justify-start" onclick={() => selectAmbience('brown')}><Waves size={16}/> Глубокий шум</Button>
         </div>
 
