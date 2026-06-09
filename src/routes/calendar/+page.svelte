@@ -68,6 +68,11 @@
     current = new Date(current.getFullYear(), current.getMonth() + amount, 1);
   }
 
+  function handleDayClick(event: MouseEvent, key: string) {
+    selectedKey = key;
+    if (event.detail === 2) showCreate = true;
+  }
+
   onMount(async () => {
     try {
       let stored = await getCalendarNotes();
@@ -141,7 +146,7 @@
           <div class="grid grid-cols-7">{#each weekdays as weekday}<div class="p-2 text-center text-xs font-semibold uppercase text-gray-500">{weekday}</div>{/each}</div>
           <div class="grid grid-cols-7 overflow-hidden rounded-lg border border-gray-800 {loading ? 'opacity-50' : ''}">
             {#each days as day}
-              <button onclick={() => selectedKey = day.key} class="relative min-h-24 border-b border-r border-gray-800 p-2 text-left transition hover:bg-gray-800 {selectedKey === day.key ? 'bg-lime-400/10 ring-1 ring-inset ring-lime-400' : 'bg-gray-900'} {day.currentMonth ? 'text-white' : 'text-gray-600'}">
+              <button onclick={(event: MouseEvent) => handleDayClick(event, day.key)} aria-label={`Выбрать ${day.key}; двойной клик — добавить заметку`} class="relative min-h-24 border-b border-r border-gray-800 p-2 text-left transition hover:bg-gray-800 {selectedKey === day.key ? 'bg-lime-400/10 ring-1 ring-inset ring-lime-400' : 'bg-gray-900'} {day.currentMonth ? 'text-white' : 'text-gray-600'}">
                 <span class="text-xs">{day.date.getDate()}</span>
                 {#if notes[day.key]?.length}<Badge color="green" class="absolute bottom-2 right-2">{notes[day.key].length}</Badge>{/if}
               </button>
