@@ -26,3 +26,23 @@ export interface UsefulLink {
   category: string;
   note: string;
 }
+
+export interface DailyCheckIn {
+  id: EntityId;
+  date: string;
+  mood: number;
+  energy: number;
+  highlight: string;
+  blockers: string;
+  notes: string;
+}
+
+export interface Routine {
+  id: EntityId;
+  title: string;
+}
+
+export interface RoutineCompletion {
+  routineId: EntityId;
+  date: string;
+}

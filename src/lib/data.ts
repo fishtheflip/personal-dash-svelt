@@ -1,4 +1,6 @@
-import type { CalendarNote, Goal, Priority, Status, UsefulLink } from '$lib/types';
+import type {
+  CalendarNote, DailyCheckIn, Goal, Priority, Routine, RoutineCompletion, Status, UsefulLink
+} from '$lib/types';
 import { supabase } from '$lib/supabase';
 
 function client() {
@@ -109,6 +111,70 @@ export async function createUsefulLinks(inputs: Omit<UsefulLink, 'id'>[]): Promi
 export async function deleteUsefulLink(id: UsefulLink['id']) {
   const { error } = await client().from('useful_links').delete().eq('id', String(id));
   fail(error);
+}
+
+export async function getDailyCheckIns(): Promise<DailyCheckIn[]> {
+  const { data, error } = await client().from('daily_check_ins').select('*').order('check_in_date', { ascending: false });
+  fail(error);
+  return (data ?? []).map((row) => ({ ...row, date: row.check_in_date })) as DailyCheckIn[];
+}
+
+export async function saveDailyCheckIn(input: Omit<DailyCheckIn, 'id'>): Promise<DailyCheckIn> {
+  const { data, error } = await client().from('daily_check_ins')
+    .upsert({
+      check_in_date: input.date,
+      mood: input.mood,
+      energy: input.energy,
+      highlight: input.highlight,
+      blockers: input.blockers,
+      notes: input.notes
+    }, { onConflict: 'owner_id,check_in_date' })
+    .select()
+    .single();
+  fail(error);
+  return { ...data, date: data.check_in_date } as DailyCheckIn;
+}
+
+export async function getRoutines(): Promise<Routine[]> {
+  const { data, error } = await client().from('routines').select('id,title').order('created_at');
+  fail(error);
+  return (data ?? []) as Routine[];
+}
+
+export async function createRoutine(title: string): Promise<Routine> {
+  const { data, error } = await client().from('routines').insert({ title }).select('id,title').single();
+  fail(error);
+  return data as Routine;
+}
+
+export async function createRoutines(titles: string[]): Promise<Routine[]> {
+  if (!titles.length) return [];
+  const { data, error } = await client().from('routines').insert(titles.map((title) => ({ title }))).select('id,title');
+  fail(error);
+  return (data ?? []) as Routine[];
+}
+
+export async function deleteRoutine(id: Routine['id']) {
+  const { error } = await client().from('routines').delete().eq('id', String(id));
+  fail(error);
+}
+
+export async function getRoutineCompletions(): Promise<RoutineCompletion[]> {
+  const { data, error } = await client().from('routine_completions').select('routine_id,completion_date');
+  fail(error);
+  return (data ?? []).map((row) => ({ routineId: row.routine_id, date: row.completion_date })) as RoutineCompletion[];
+}
+
+export async function setRoutineCompletion(routineId: Routine['id'], date: string, completed: boolean) {
+  if (completed) {
+    const { error } = await client().from('routine_completions')
+      .upsert({ routine_id: String(routineId), completion_date: date }, { onConflict: 'routine_id,completion_date' });
+    fail(error);
+  } else {
+    const { error } = await client().from('routine_completions')
+      .delete().eq('routine_id', String(routineId)).eq('completion_date', date);
+    fail(error);
+  }
 }
 
 export function goalInput(goal: Goal): Pick<Goal, 'title' | 'area' | 'status' | 'priority'> {

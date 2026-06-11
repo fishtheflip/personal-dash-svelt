@@ -4,8 +4,10 @@
 
 1. Откройте [Supabase Dashboard](https://supabase.com/dashboard) и создайте новый project.
 2. В `SQL Editor` выполните файл `supabase/migrations/202606060001_initial_schema.sql`.
-3. В `Authentication → Providers → Email` оставьте Email provider включённым.
-4. В `Authentication → Sign In / Providers` отключите публичную регистрацию пользователей (`Allow new users to sign up`), если она доступна в текущем интерфейсе.
+3. Затем выполните `supabase/migrations/202606090001_daily_check_ins.sql`.
+4. После него выполните `supabase/migrations/202606110001_routines.sql`.
+5. В `Authentication → Providers → Email` оставьте Email provider включённым.
+6. В `Authentication → Sign In / Providers` отключите публичную регистрацию пользователей (`Allow new users to sign up`), если она доступна в текущем интерфейсе.
 
 ## 2. Создать единственного пользователя
 
