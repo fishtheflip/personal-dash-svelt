@@ -1,5 +1,5 @@
 import type {
-  CalendarNote, DailyCheckIn, Goal, Priority, Routine, RoutineCompletion, Status, UsefulLink
+  CalendarNote, DailyCheckIn, Goal, Idea, IdeaGoalLink, IdeaType, Priority, Routine, RoutineCompletion, Status, UsefulLink
 } from '$lib/types';
 import { supabase } from '$lib/supabase';
 
@@ -173,6 +173,71 @@ export async function setRoutineCompletion(routineId: Routine['id'], date: strin
   } else {
     const { error } = await client().from('routine_completions')
       .delete().eq('routine_id', String(routineId)).eq('completion_date', date);
+    fail(error);
+  }
+}
+
+export async function getIdeaTypes(): Promise<IdeaType[]> {
+  const { data, error } = await client().from('idea_types').select('id,name').order('created_at');
+  fail(error);
+  return (data ?? []) as IdeaType[];
+}
+
+export async function createIdeaType(name: string): Promise<IdeaType> {
+  const { data, error } = await client().from('idea_types').insert({ name }).select('id,name').single();
+  fail(error);
+  return data as IdeaType;
+}
+
+export async function createIdeaTypes(names: string[]): Promise<IdeaType[]> {
+  if (!names.length) return [];
+  const { data, error } = await client().from('idea_types')
+    .insert(names.map((name) => ({ name })))
+    .select('id,name');
+  fail(error);
+  return (data ?? []) as IdeaType[];
+}
+
+export async function deleteIdeaType(id: IdeaType['id']) {
+  const { error } = await client().from('idea_types').delete().eq('id', String(id));
+  fail(error);
+}
+
+export async function getIdeas(): Promise<Idea[]> {
+  const { data, error } = await client().from('ideas').select('id,title,description,type_id').order('created_at', { ascending: false });
+  fail(error);
+  return (data ?? []).map((row) => ({ ...row, typeId: row.type_id })) as Idea[];
+}
+
+export async function createIdea(input: Omit<Idea, 'id'>): Promise<Idea> {
+  const { data, error } = await client().from('ideas')
+    .insert({ title: input.title, description: input.description, type_id: String(input.typeId) })
+    .select('id,title,description,type_id')
+    .single();
+  fail(error);
+  if (!data) throw new Error('Не удалось создать идею');
+  return { ...data, typeId: data.type_id } as Idea;
+}
+
+export async function deleteIdea(id: Idea['id']) {
+  const { error } = await client().from('ideas').delete().eq('id', String(id));
+  fail(error);
+}
+
+export async function getIdeaGoalLinks(): Promise<IdeaGoalLink[]> {
+  const { data, error } = await client().from('idea_goal_links').select('idea_id,goal_id');
+  fail(error);
+  return (data ?? []).map((row) => ({ ideaId: row.idea_id, goalId: row.goal_id })) as IdeaGoalLink[];
+}
+
+export async function setIdeaGoalLink(ideaId: Idea['id'], goalId: Goal['id'], linked: boolean) {
+  if (linked) {
+    const { error } = await client().from('idea_goal_links')
+      .upsert({ idea_id: String(ideaId), goal_id: String(goalId) }, { onConflict: 'idea_id,goal_id' });
+    fail(error);
+  } else {
+    const { error } = await client().from('idea_goal_links')
+      .delete().eq('idea_id', String(ideaId)).eq('goal_id', String(goalId));
     fail(error);
   }
 }

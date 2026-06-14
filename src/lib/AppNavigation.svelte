@@ -1,14 +1,14 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { Badge, Button, Sidebar, SidebarGroup, SidebarItem } from 'flowbite-svelte';
-  import { CalendarDays, CircleDot, ClipboardCheck, Link, Menu, TimerReset, X } from '@lucide/svelte';
+  import { CalendarDays, CircleDot, ClipboardCheck, Lightbulb, Link, Menu, TimerReset, X } from '@lucide/svelte';
 
   let {
     active,
     kanbanCount,
     pomodoroCount
   }: {
-    active: 'kanban' | 'calendar' | 'links' | 'pomodoro' | 'check-in';
+    active: 'kanban' | 'calendar' | 'links' | 'ideas' | 'pomodoro' | 'check-in';
     kanbanCount?: number;
     pomodoroCount?: number;
   } = $props();
@@ -51,6 +51,9 @@
       </SidebarItem>
       <SidebarItem href={`${base}/links`} label="Ссылки" active={active === 'links'} onclick={close}>
         {#snippet icon()}<Link size={17}/>{/snippet}
+      </SidebarItem>
+      <SidebarItem href={`${base}/ideas`} label="Идеи" active={active === 'ideas'} onclick={close}>
+        {#snippet icon()}<Lightbulb size={17}/>{/snippet}
       </SidebarItem>
       <SidebarItem href={`${base}/pomodoro`} label="Pomodoro" active={active === 'pomodoro'} onclick={close}>
         {#snippet icon()}<TimerReset size={17}/>{/snippet}

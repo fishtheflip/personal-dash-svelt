@@ -46,3 +46,20 @@ export interface RoutineCompletion {
   routineId: EntityId;
   date: string;
 }
+
+export interface IdeaType {
+  id: EntityId;
+  name: string;
+}
+
+export interface Idea {
+  id: EntityId;
+  title: string;
+  description: string;
+  typeId: EntityId;
+}
+
+export interface IdeaGoalLink {
+  ideaId: EntityId;
+  goalId: EntityId;
+}
