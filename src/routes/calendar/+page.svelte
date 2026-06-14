@@ -5,12 +5,13 @@
     Badge, Button, Card, Input, Modal, Textarea
   } from 'flowbite-svelte';
   import {
-    CalendarDays, ChevronLeft, ChevronRight, Plus, Search, Trash2
+    ArrowDown, ArrowRight, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, Plus, Search, Trash2
   } from '@lucide/svelte';
   import AppNavigation from '$lib/AppNavigation.svelte';
   import type { CalendarNote } from '$lib/types';
   import {
-    createCalendarNote, createCalendarNotes, deleteCalendarNote, getCalendarNotes
+    createCalendarNote, createCalendarNotes, deleteCalendarNote, getCalendarNotes, moveCalendarNoteToDate,
+    updateCalendarNoteOrder
   } from '$lib/data';
 
   type Note = Omit<CalendarNote, 'date'>;
@@ -31,6 +32,8 @@
   let title = $state('');
   let text = $state('');
   let query = $state('');
+  let sortingIds = $state<Set<Note['id']>>(new Set());
+  let movingIds = $state<Set<Note['id']>>(new Set());
 
   let days = $derived(buildCalendar(current));
   let selectedNotes = $derived((notes[selectedKey] ?? []).filter((note) =>
@@ -79,15 +82,17 @@
       if (!stored.length) {
         const local = loadNotes();
         stored = await createCalendarNotes(Object.entries(local).flatMap(([date, items]) =>
-          items.map((item) => ({ date, title: item.title, text: item.text }))
+          items.map((item, index) => ({ date, title: item.title, text: item.text, sortOrder: index }))
         ));
       }
       notes = stored.reduce<Record<string, Note[]>>((result, item) => {
-        result[item.date] = [...(result[item.date] ?? []), { id: item.id, title: item.title, text: item.text }];
+        result[item.date] = [...(result[item.date] ?? []), {
+          id: item.id, title: item.title, text: item.text, sortOrder: item.sortOrder
+        }];
         return result;
       }, {});
     } catch (error) {
-      errorMessage = error instanceof Error ? error.message : 'Не удалось загрузить заметки';
+      errorMessage = calendarError(error);
     } finally {
       loading = false;
     }
@@ -96,13 +101,16 @@
   async function addNote() {
     if (!title.trim()) return;
     try {
-      const created = await createCalendarNote({ date: selectedKey, title: title.trim(), text: text.trim() });
-      notes[selectedKey] = [...(notes[selectedKey] ?? []), { id: created.id, title: created.title, text: created.text }];
+      const sortOrder = Math.max(-1, ...(notes[selectedKey] ?? []).map((note) => note.sortOrder)) + 1;
+      const created = await createCalendarNote({ date: selectedKey, title: title.trim(), text: text.trim(), sortOrder });
+      notes[selectedKey] = [...(notes[selectedKey] ?? []), {
+        id: created.id, title: created.title, text: created.text, sortOrder: created.sortOrder
+      }];
       title = '';
       text = '';
       showCreate = false;
     } catch (error) {
-      errorMessage = error instanceof Error ? error.message : 'Не удалось добавить заметку';
+      errorMessage = calendarError(error);
     }
   }
 
@@ -111,8 +119,62 @@
       await deleteCalendarNote(id);
       notes[selectedKey] = (notes[selectedKey] ?? []).filter((note) => note.id !== id);
     } catch (error) {
-      errorMessage = error instanceof Error ? error.message : 'Не удалось удалить заметку';
+      errorMessage = calendarError(error);
     }
+  }
+
+  async function moveNote(note: Note, direction: -1 | 1) {
+    const currentNotes = notes[selectedKey] ?? [];
+    const index = currentNotes.findIndex((item) => item.id === note.id);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= currentNotes.length || sortingIds.has(note.id)) return;
+
+    const target = currentNotes[targetIndex];
+    const reordered = [...currentNotes];
+    reordered[index] = { ...target, sortOrder: index };
+    reordered[targetIndex] = { ...note, sortOrder: targetIndex };
+    sortingIds = new Set([...sortingIds, note.id, target.id]);
+    notes[selectedKey] = reordered;
+
+    try {
+      await updateCalendarNoteOrder([
+        { id: note.id, sortOrder: targetIndex },
+        { id: target.id, sortOrder: index }
+      ]);
+    } catch (error) {
+      notes[selectedKey] = currentNotes;
+      errorMessage = calendarError(error);
+    } finally {
+      sortingIds = new Set([...sortingIds].filter((id) => id !== note.id && id !== target.id));
+    }
+  }
+
+  async function moveToNextDay(note: Note) {
+    if (movingIds.has(note.id)) return;
+    const sourceDate = selectedKey;
+    const nextDate = new Date(`${sourceDate}T12:00:00`);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const targetDate = dateKey(nextDate);
+    const targetOrder = Math.max(-1, ...(notes[targetDate] ?? []).map((item) => item.sortOrder)) + 1;
+    movingIds = new Set([...movingIds, note.id]);
+    errorMessage = '';
+
+    try {
+      await moveCalendarNoteToDate(note.id, targetDate, targetOrder);
+      notes[sourceDate] = (notes[sourceDate] ?? []).filter((item) => item.id !== note.id);
+      notes[targetDate] = [...(notes[targetDate] ?? []), { ...note, sortOrder: targetOrder }];
+    } catch (error) {
+      errorMessage = calendarError(error);
+    } finally {
+      movingIds = new Set([...movingIds].filter((id) => id !== note.id));
+    }
+  }
+
+  function calendarError(error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    return message.includes('sort_order')
+      ? 'Выполните миграцию supabase/migrations/202606150001_calendar_note_order.sql в Supabase SQL Editor.'
+      : message || 'Не удалось обработать заметку';
   }
 
   function selectedDateLabel() {
@@ -159,7 +221,15 @@
           <div class="space-y-3">
             {#each selectedNotes as note}
               <Card class="max-w-none border-gray-700 bg-gray-800 p-3">
-                <div class="flex items-start gap-3"><div class="min-w-0 flex-1"><h3 class="text-sm font-semibold">{note.title}</h3>{#if note.text}<p class="mt-1 text-xs leading-relaxed text-gray-400">{note.text}</p>{/if}</div><Button color="red" size="xs" outline onclick={() => deleteNote(note.id)} aria-label="Удалить заметку"><Trash2 size={13}/></Button></div>
+                <div class="flex items-start gap-2">
+                  <div class="min-w-0 flex-1"><h3 class="text-sm font-semibold">{note.title}</h3>{#if note.text}<p class="mt-1 text-xs leading-relaxed text-gray-400">{note.text}</p>{/if}</div>
+                  <div class="flex shrink-0 gap-1">
+                    <Button color="dark" size="xs" disabled={Boolean(query) || (notes[selectedKey] ?? []).findIndex((item) => item.id === note.id) === 0 || sortingIds.has(note.id)} onclick={() => moveNote(note, -1)} aria-label="Переместить заметку вверх"><ArrowUp size={13}/></Button>
+                    <Button color="dark" size="xs" disabled={Boolean(query) || (notes[selectedKey] ?? []).findIndex((item) => item.id === note.id) === (notes[selectedKey]?.length ?? 0) - 1 || sortingIds.has(note.id)} onclick={() => moveNote(note, 1)} aria-label="Переместить заметку вниз"><ArrowDown size={13}/></Button>
+                    <Button color="green" size="sm" class="px-2.5 shadow-sm shadow-lime-500/25" disabled={movingIds.has(note.id)} onclick={() => moveToNextDay(note)} aria-label="Перенести заметку на следующий день" title="Перенести на завтра"><ArrowRight size={16}/></Button>
+                    <Button color="red" size="xs" outline class="ml-1.5" onclick={() => deleteNote(note.id)} aria-label="Удалить заметку"><Trash2 size={13}/></Button>
+                  </div>
+                </div>
               </Card>
             {:else}
               <div class="rounded-lg border border-dashed border-gray-700 p-8 text-center text-sm text-gray-500">На этот день заметок нет</div>

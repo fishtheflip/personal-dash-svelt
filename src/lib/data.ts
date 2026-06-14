@@ -62,30 +62,49 @@ export async function createSpaces(names: string[]) {
 }
 
 export async function getCalendarNotes(): Promise<CalendarNote[]> {
-  const { data, error } = await client().from('calendar_notes').select('*').order('created_at');
+  const { data, error } = await client().from('calendar_notes').select('*')
+    .order('note_date')
+    .order('sort_order')
+    .order('created_at');
   fail(error);
-  return (data ?? []).map((row) => ({ ...row, date: row.note_date })) as CalendarNote[];
+  return (data ?? []).map((row) => ({ ...row, date: row.note_date, sortOrder: row.sort_order })) as CalendarNote[];
 }
 
 export async function createCalendarNote(input: Omit<CalendarNote, 'id'>): Promise<CalendarNote> {
   const { data, error } = await client().from('calendar_notes')
-    .insert({ note_date: input.date, title: input.title, text: input.text })
+    .insert({ note_date: input.date, title: input.title, text: input.text, sort_order: input.sortOrder })
     .select().single();
   fail(error);
-  return { ...data, date: data.note_date } as CalendarNote;
+  return { ...data, date: data.note_date, sortOrder: data.sort_order } as CalendarNote;
 }
 
 export async function createCalendarNotes(inputs: Omit<CalendarNote, 'id'>[]): Promise<CalendarNote[]> {
   if (!inputs.length) return [];
   const { data, error } = await client().from('calendar_notes')
-    .insert(inputs.map((item) => ({ note_date: item.date, title: item.title, text: item.text })))
+    .insert(inputs.map((item) => ({ note_date: item.date, title: item.title, text: item.text, sort_order: item.sortOrder })))
     .select();
   fail(error);
-  return (data ?? []).map((row) => ({ ...row, date: row.note_date })) as CalendarNote[];
+  return (data ?? []).map((row) => ({ ...row, date: row.note_date, sortOrder: row.sort_order })) as CalendarNote[];
 }
 
 export async function deleteCalendarNote(id: CalendarNote['id']) {
   const { error } = await client().from('calendar_notes').delete().eq('id', String(id));
+  fail(error);
+}
+
+export async function updateCalendarNoteOrder(items: Pick<CalendarNote, 'id' | 'sortOrder'>[]) {
+  await Promise.all(items.map(async (item) => {
+    const { error } = await client().from('calendar_notes')
+      .update({ sort_order: item.sortOrder })
+      .eq('id', String(item.id));
+    fail(error);
+  }));
+}
+
+export async function moveCalendarNoteToDate(id: CalendarNote['id'], date: string, sortOrder: number) {
+  const { error } = await client().from('calendar_notes')
+    .update({ note_date: date, sort_order: sortOrder })
+    .eq('id', String(id));
   fail(error);
 }
 

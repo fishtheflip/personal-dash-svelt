@@ -238,7 +238,7 @@
 
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 {loading ? 'opacity-50' : ''}">
         {#each filteredIdeas as idea}
-          <Card class="max-w-none border-gray-800 bg-gray-900 p-3.5">
+          <Card class="flex h-full max-w-none flex-col border-gray-800 bg-gray-900 p-3.5">
             <div class="flex items-start gap-2">
               <div class="min-w-0 flex-1">
                 <div class="mb-2 flex items-center gap-2"><Badge color="green">{typeName(idea.typeId)}</Badge>{#if linkedGoals(idea.id).length}<span class="text-[11px] text-gray-500">{linkedGoals(idea.id).filter((goal) => goal.status === 'done').length}/{linkedGoals(idea.id).length} задач</span>{/if}</div>
@@ -246,16 +246,18 @@
               </div>
               <Button color="dark" size="xs" onclick={() => removeIdea(idea.id)} aria-label={`Удалить идею: ${idea.title}`}><Trash2 size={13}/></Button>
             </div>
-            {#if idea.description}<p class="mt-2 line-clamp-2 text-sm leading-relaxed text-gray-500">{idea.description}</p>{/if}
-            {#if linkedGoals(idea.id).length}
-              <div class="mt-3 flex flex-wrap gap-1.5">
+            <p class="mt-2 min-h-10 line-clamp-2 text-sm leading-relaxed text-gray-500">{idea.description}</p>
+            <div class="mt-3 min-h-6">
+              {#if linkedGoals(idea.id).length}
+                <div class="flex flex-wrap gap-1.5">
                 {#each linkedGoals(idea.id).slice(0, 2) as goal}
                   <span class="max-w-full truncate rounded-md bg-gray-800 px-2 py-1 text-[11px] {goal.status === 'done' ? 'text-gray-600 line-through' : 'text-gray-400'}">{goal.title}</span>
                 {/each}
                 {#if linkedGoals(idea.id).length > 2}<span class="rounded-md bg-gray-800 px-2 py-1 text-[11px] text-gray-500">+{linkedGoals(idea.id).length - 2}</span>{/if}
-              </div>
-            {/if}
-            <div class="mt-3 flex gap-2 border-t border-gray-800 pt-3">
+                </div>
+              {/if}
+            </div>
+            <div class="mt-auto flex gap-2 border-t border-gray-800 pt-3">
               <Button color="green" size="xs" onclick={() => openGoalCreation(idea)}><ListPlus size={13}/> Создать задачу</Button>
               <Button color="dark" size="xs" onclick={() => openGoals(idea)}><Link2 size={13}/> Связать</Button>
             </div>

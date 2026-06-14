@@ -17,6 +17,7 @@ export interface CalendarNote {
   date: string;
   title: string;
   text: string;
+  sortOrder: number;
 }
 
 export interface UsefulLink {
