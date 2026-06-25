@@ -135,8 +135,8 @@
 
 <Modal bind:open={showCreate} title="Новая ссылка" size="md" class="border border-gray-700 bg-gray-900 text-white" headerClass="border-b border-gray-700 bg-gray-900 text-white" bodyClass="bg-gray-900" closeBtnClass="text-gray-400 hover:bg-gray-800">
   <form onsubmit={(event) => { event.preventDefault(); addLink(); }}>
-    <label class="block text-sm text-gray-400">Название<Input bind:value={title} class="mt-2 border-gray-700 bg-gray-800 text-white" placeholder="Например, DP staging"/></label>
-    <label class="mt-4 block text-sm text-gray-400">URL<Input bind:value={url} class="mt-2 border-gray-700 bg-gray-800 text-white" placeholder="https://..."/></label>
+    <label class="block text-sm text-gray-400">URL<Input bind:value={url} class="mt-2 border-gray-700 bg-gray-800 text-white" placeholder="https://..."/></label>
+    <label class="mt-4 block text-sm text-gray-400">Название<Input bind:value={title} class="mt-2 border-gray-700 bg-gray-800 text-white" placeholder="Например, DP staging"/></label>
     <label class="mt-4 block text-sm text-gray-400">Категория<Select bind:value={linkCategory} items={categoryOptions} class="mt-2 border-gray-700 bg-gray-800 text-white"/></label>
     <label class="mt-4 block text-sm text-gray-400">Заметка<Textarea bind:value={note} rows={3} class="mt-2 border-gray-700 bg-gray-800 text-white" placeholder="Для чего эта ссылка?"/></label>
     <Button type="submit" color="green" class="mt-5 w-full justify-center"><Plus size={16}/> Добавить ссылку</Button>

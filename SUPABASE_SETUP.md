@@ -9,8 +9,11 @@
 5. Затем выполните `supabase/migrations/202606140001_ideas.sql`.
 6. После миграции идей выполните `supabase/migrations/202606140002_idea_goal_links.sql`.
 7. Затем выполните `supabase/migrations/202606150001_calendar_note_order.sql`.
-8. В `Authentication → Providers → Email` оставьте Email provider включённым.
-9. В `Authentication → Sign In / Providers` отключите публичную регистрацию пользователей (`Allow new users to sign up`), если она доступна в текущем интерфейсе.
+8. Затем выполните `supabase/migrations/202606180001_contacts.sql`.
+9. После неё выполните `supabase/migrations/202606180002_contact_comments.sql`.
+10. Затем выполните `supabase/migrations/202606250001_move_calendar_note_rpc.sql`.
+11. В `Authentication → Providers → Email` оставьте Email provider включённым.
+12. В `Authentication → Sign In / Providers` отключите публичную регистрацию пользователей (`Allow new users to sign up`), если она доступна в текущем интерфейсе.
 
 ## 2. Создать единственного пользователя
 

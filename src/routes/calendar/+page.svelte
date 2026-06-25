@@ -34,6 +34,8 @@
   let query = $state('');
   let sortingIds = $state<Set<Note['id']>>(new Set());
   let movingIds = $state<Set<Note['id']>>(new Set());
+  let draggedNote = $state<{ date: string; note: Note } | null>(null);
+  let dropTargetKey = $state('');
 
   let days = $derived(buildCalendar(current));
   let selectedNotes = $derived((notes[selectedKey] ?? []).filter((note) =>
@@ -154,16 +156,72 @@
     const sourceDate = selectedKey;
     const nextDate = new Date(`${sourceDate}T12:00:00`);
     nextDate.setDate(nextDate.getDate() + 1);
-    const targetDate = dateKey(nextDate);
-    const targetOrder = Math.max(-1, ...(notes[targetDate] ?? []).map((item) => item.sortOrder)) + 1;
+    await moveNoteToDate(note, sourceDate, dateKey(nextDate), { selectTarget: false });
+  }
+
+  function handleNoteDragStart(event: DragEvent, note: Note) {
+    if (!event.dataTransfer || movingIds.has(note.id)) return;
+    draggedNote = { date: selectedKey, note };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(note.id));
+    event.dataTransfer.setData('application/x-calendar-note-id', String(note.id));
+  }
+
+  function handleNoteDragEnd() {
+    draggedNote = null;
+    dropTargetKey = '';
+  }
+
+  function handleDayDragOver(event: DragEvent, key: string) {
+    if (!draggedNote || movingIds.has(draggedNote.note.id)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    dropTargetKey = key;
+  }
+
+  function handleDayDragLeave(event: DragEvent, key: string) {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (event.currentTarget instanceof Node && nextTarget && event.currentTarget.contains(nextTarget)) return;
+    if (dropTargetKey === key) dropTargetKey = '';
+  }
+
+  async function handleDayDrop(event: DragEvent, targetDate: string) {
+    event.preventDefault();
+    const id = event.dataTransfer?.getData('application/x-calendar-note-id') || event.dataTransfer?.getData('text/plain');
+    const sourceDate = draggedNote?.date ?? Object.keys(notes).find((date) =>
+      notes[date]?.some((item) => String(item.id) === id)
+    );
+    const note = draggedNote?.note ?? (sourceDate ? notes[sourceDate]?.find((item) => String(item.id) === id) : undefined);
+    draggedNote = null;
+    dropTargetKey = '';
+    if (!sourceDate || !note) return;
+    await moveNoteToDate(note, sourceDate, targetDate, { selectTarget: true });
+  }
+
+  async function moveNoteToDate(note: Note, sourceDate: string, targetDate: string, options: { selectTarget: boolean }) {
+    if (movingIds.has(note.id)) return;
+    if (sourceDate === targetDate) {
+      if (options.selectTarget) selectedKey = targetDate;
+      return;
+    }
+
+    const sourceNotes = notes[sourceDate] ?? [];
+    const targetNotes = notes[targetDate] ?? [];
+    const targetOrder = Math.max(-1, ...targetNotes.map((item) => item.sortOrder)) + 1;
+    const moved = { ...note, sortOrder: targetOrder };
+
     movingIds = new Set([...movingIds, note.id]);
     errorMessage = '';
+    notes[sourceDate] = sourceNotes.filter((item) => item.id !== note.id);
+    notes[targetDate] = [...targetNotes, moved];
+    if (options.selectTarget) selectedKey = targetDate;
 
     try {
       await moveCalendarNoteToDate(note.id, targetDate, targetOrder);
-      notes[sourceDate] = (notes[sourceDate] ?? []).filter((item) => item.id !== note.id);
-      notes[targetDate] = [...(notes[targetDate] ?? []), { ...note, sortOrder: targetOrder }];
     } catch (error) {
+      notes[sourceDate] = sourceNotes;
+      notes[targetDate] = targetNotes;
+      if (options.selectTarget) selectedKey = sourceDate;
       errorMessage = calendarError(error);
     } finally {
       movingIds = new Set([...movingIds].filter((id) => id !== note.id));
@@ -172,7 +230,11 @@
 
   function calendarError(error: unknown) {
     const message = error instanceof Error ? error.message : '';
-    return message.includes('sort_order')
+    return message.includes('NetworkError') || message.includes('Failed to fetch') || message.includes('Load failed')
+      ? 'Не удалось связаться с Supabase. Проверь интернет/VPN и попробуй ещё раз. Если ошибка только на переносе вправо, выполни миграцию supabase/migrations/202606250001_move_calendar_note_rpc.sql.'
+      : message.includes('move_calendar_note')
+      ? 'Выполните миграцию supabase/migrations/202606250001_move_calendar_note_rpc.sql в Supabase SQL Editor.'
+      : message.includes('sort_order')
       ? 'Выполните миграцию supabase/migrations/202606150001_calendar_note_order.sql в Supabase SQL Editor.'
       : message || 'Не удалось обработать заметку';
   }
@@ -199,7 +261,7 @@
     <div class="p-5 lg:p-8">
       {#if errorMessage}<div class="mb-5 rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">{errorMessage}</div>{/if}
       <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div><div class="mb-2 flex items-center gap-2 text-xs font-medium text-lime-400"><CalendarDays size={14}/> Планирование по датам</div><h1 class="text-4xl font-bold tracking-tight">Календарь</h1><p class="mt-2 text-sm text-gray-500">Выбери день и оставь заметку.</p></div>
+        <div><div class="mb-2 flex items-center gap-2 text-xs font-medium text-lime-400"><CalendarDays size={14}/> Планирование по датам</div><h1 class="text-4xl font-bold tracking-tight">Календарь</h1><p class="mt-2 text-sm text-gray-500">Выбери день или перетащи заметку на нужную дату.</p></div>
         <div class="flex items-center gap-2"><Button color="dark" size="sm" onclick={() => changeMonth(-1)} aria-label="Предыдущий месяц"><ChevronLeft size={16}/></Button><strong class="min-w-40 text-center">{months[current.getMonth()]} {current.getFullYear()}</strong><Button color="dark" size="sm" onclick={() => changeMonth(1)} aria-label="Следующий месяц"><ChevronRight size={16}/></Button></div>
       </div>
 
@@ -208,8 +270,16 @@
           <div class="grid grid-cols-7">{#each weekdays as weekday}<div class="p-2 text-center text-xs font-semibold uppercase text-gray-500">{weekday}</div>{/each}</div>
           <div class="grid grid-cols-7 overflow-hidden rounded-lg border border-gray-800 {loading ? 'opacity-50' : ''}">
             {#each days as day}
-              <button onclick={(event: MouseEvent) => handleDayClick(event, day.key)} aria-label={`Выбрать ${day.key}; двойной клик — добавить заметку`} class="relative min-h-24 border-b border-r border-gray-800 p-2 text-left transition hover:bg-gray-800 {selectedKey === day.key ? 'bg-lime-400/10 ring-1 ring-inset ring-lime-400' : 'bg-gray-900'} {day.currentMonth ? 'text-white' : 'text-gray-600'}">
+              <button
+                onclick={(event: MouseEvent) => handleDayClick(event, day.key)}
+                ondragover={(event: DragEvent) => handleDayDragOver(event, day.key)}
+                ondragleave={(event: DragEvent) => handleDayDragLeave(event, day.key)}
+                ondrop={(event: DragEvent) => handleDayDrop(event, day.key)}
+                aria-label={`Выбрать ${day.key}; двойной клик — добавить заметку; можно перетащить сюда заметку`}
+                class="relative min-h-24 border-b border-r border-gray-800 p-2 text-left transition hover:bg-gray-800 {selectedKey === day.key ? 'bg-lime-400/10 ring-1 ring-inset ring-lime-400' : 'bg-gray-900'} {dropTargetKey === day.key ? 'bg-lime-400/20 ring-2 ring-inset ring-lime-300' : ''} {draggedNote && selectedKey !== day.key ? 'border-lime-500/40' : ''} {day.currentMonth ? 'text-white' : 'text-gray-600'}"
+              >
                 <span class="text-xs">{day.date.getDate()}</span>
+                {#if dropTargetKey === day.key}<span class="absolute left-2 top-8 rounded-md bg-lime-400 px-2 py-1 text-[10px] font-semibold text-gray-950">Перенести сюда</span>{/if}
                 {#if notes[day.key]?.length}<Badge color="green" class="absolute bottom-2 right-2">{notes[day.key].length}</Badge>{/if}
               </button>
             {/each}
@@ -220,7 +290,12 @@
           <div class="mb-4 flex items-center justify-between"><div><div class="text-xs uppercase tracking-wide text-gray-500">Заметки на дату</div><h2 class="mt-1 font-semibold capitalize">{selectedDateLabel()}</h2></div><Button color="green" size="sm" onclick={() => showCreate = true}><Plus size={15}/></Button></div>
           <div class="space-y-3">
             {#each selectedNotes as note}
-              <Card class="max-w-none border-gray-700 bg-gray-800 p-3">
+              <Card
+                draggable={!movingIds.has(note.id)}
+                ondragstart={(event: DragEvent) => handleNoteDragStart(event, note)}
+                ondragend={handleNoteDragEnd}
+                class="max-w-none border-gray-700 bg-gray-800 p-3 transition {movingIds.has(note.id) ? 'opacity-50' : 'cursor-grab active:cursor-grabbing'} {draggedNote?.note.id === note.id ? 'border-lime-400/70 opacity-70' : ''}"
+              >
                 <div class="flex items-start gap-2">
                   <div class="min-w-0 flex-1"><h3 class="text-sm font-semibold">{note.title}</h3>{#if note.text}<p class="mt-1 text-xs leading-relaxed text-gray-400">{note.text}</p>{/if}</div>
                   <div class="flex shrink-0 gap-1">

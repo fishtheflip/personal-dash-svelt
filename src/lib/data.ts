@@ -1,5 +1,5 @@
 import type {
-  CalendarNote, DailyCheckIn, Goal, Idea, IdeaGoalLink, IdeaType, Priority, Routine, RoutineCompletion, Status, UsefulLink
+  CalendarNote, Contact, DailyCheckIn, Goal, Idea, IdeaGoalLink, IdeaType, Priority, Routine, RoutineCompletion, Status, UsefulLink
 } from '$lib/types';
 import { supabase } from '$lib/supabase';
 
@@ -10,6 +10,11 @@ function client() {
 
 function fail(error: { message: string } | null) {
   if (error) throw new Error(error.message);
+}
+
+function isMissingRpc(error: unknown, functionName: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes(functionName) || message.includes('schema cache');
 }
 
 export async function getGoals(): Promise<Goal[]> {
@@ -102,10 +107,21 @@ export async function updateCalendarNoteOrder(items: Pick<CalendarNote, 'id' | '
 }
 
 export async function moveCalendarNoteToDate(id: CalendarNote['id'], date: string, sortOrder: number) {
-  const { error } = await client().from('calendar_notes')
-    .update({ note_date: date, sort_order: sortOrder })
-    .eq('id', String(id));
-  fail(error);
+  const db = client();
+  try {
+    const { error } = await db.rpc('move_calendar_note', {
+      note_id: String(id),
+      target_date: date,
+      target_sort_order: sortOrder
+    });
+    fail(error);
+  } catch (error) {
+    if (!isMissingRpc(error, 'move_calendar_note')) throw error;
+    const { error: updateError } = await db.from('calendar_notes')
+      .update({ note_date: date, sort_order: sortOrder })
+      .eq('id', String(id));
+    fail(updateError);
+  }
 }
 
 export async function getUsefulLinks(): Promise<UsefulLink[]> {
@@ -129,6 +145,23 @@ export async function createUsefulLinks(inputs: Omit<UsefulLink, 'id'>[]): Promi
 
 export async function deleteUsefulLink(id: UsefulLink['id']) {
   const { error } = await client().from('useful_links').delete().eq('id', String(id));
+  fail(error);
+}
+
+export async function getContacts(): Promise<Contact[]> {
+  const { data, error } = await client().from('contacts').select('*').order('created_at', { ascending: false });
+  fail(error);
+  return (data ?? []) as Contact[];
+}
+
+export async function createContact(input: Omit<Contact, 'id'>): Promise<Contact> {
+  const { data, error } = await client().from('contacts').insert(input).select().single();
+  fail(error);
+  return data as Contact;
+}
+
+export async function deleteContact(id: Contact['id']) {
+  const { error } = await client().from('contacts').delete().eq('id', String(id));
   fail(error);
 }
 

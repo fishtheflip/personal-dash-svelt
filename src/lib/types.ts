@@ -28,6 +28,17 @@ export interface UsefulLink {
   note: string;
 }
 
+export interface Contact {
+  id: EntityId;
+  name: string;
+  phone: string;
+  telegram: string;
+  linkedin: string;
+  social: string;
+  note: string;
+  comments: string;
+}
+
 export interface DailyCheckIn {
   id: EntityId;
   date: string;

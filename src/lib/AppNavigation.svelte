@@ -1,14 +1,14 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { Badge, Button, Sidebar, SidebarGroup, SidebarItem } from 'flowbite-svelte';
-  import { CalendarDays, CircleDot, ClipboardCheck, Lightbulb, Link, Menu, TimerReset, X } from '@lucide/svelte';
+  import { BarChart3, CalendarDays, CircleDot, ClipboardCheck, Lightbulb, Link, Menu, TimerReset, UserRound, X } from '@lucide/svelte';
 
   let {
     active,
     kanbanCount,
     pomodoroCount
   }: {
-    active: 'kanban' | 'calendar' | 'links' | 'ideas' | 'pomodoro' | 'check-in';
+    active: 'kanban' | 'calendar' | 'links' | 'contacts' | 'ideas' | 'polymarket' | 'pomodoro' | 'check-in';
     kanbanCount?: number;
     pomodoroCount?: number;
   } = $props();
@@ -52,6 +52,9 @@
       <SidebarItem href={`${base}/links`} label="Ссылки" active={active === 'links'} onclick={close}>
         {#snippet icon()}<Link size={17}/>{/snippet}
       </SidebarItem>
+      <SidebarItem href={`${base}/contacts`} label="Контакты" active={active === 'contacts'} onclick={close}>
+        {#snippet icon()}<UserRound size={17}/>{/snippet}
+      </SidebarItem>
       <SidebarItem href={`${base}/ideas`} label="Идеи" active={active === 'ideas'} onclick={close}>
         {#snippet icon()}<Lightbulb size={17}/>{/snippet}
       </SidebarItem>
@@ -61,6 +64,19 @@
       </SidebarItem>
       <SidebarItem href={`${base}/check-in`} label="Чек-ин" active={active === 'check-in'} onclick={close}>
         {#snippet icon()}<ClipboardCheck size={17}/>{/snippet}
+      </SidebarItem>
+    </SidebarGroup>
+    <SidebarGroup border borderClass="mt-5 border-t border-gray-800 pt-4">
+      <SidebarItem
+        href={`${base}/polymarket`}
+        label="Polymarket"
+        active={active === 'polymarket'}
+        activeClass="flex items-center border-l-2 border-blue-400 bg-blue-500/10 p-2 text-base font-normal text-blue-300"
+        nonActiveClass="flex items-center border-l-2 border-transparent p-2 text-base font-normal text-gray-400 hover:border-blue-500/50 hover:bg-gray-800 hover:text-blue-300"
+        aClass="rounded-r-lg rounded-l-sm"
+        onclick={close}
+      >
+        {#snippet icon()}<BarChart3 size={17} class="text-blue-400"/>{/snippet}
       </SidebarItem>
     </SidebarGroup>
   </Sidebar>
