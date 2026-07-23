@@ -2,6 +2,7 @@ import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 const isProduction = process.env.NODE_ENV === 'production';
+const basePath = process.env.BASE_PATH ?? (isProduction ? '/personal-dash-svelt' : '');
 
 export default {
   preprocess: vitePreprocess(),
@@ -14,7 +15,7 @@ export default {
       strict: true
     }),
     paths: {
-      base: isProduction ? '/personal-dash-svelt' : ''
+      base: basePath
     }
   }
 };

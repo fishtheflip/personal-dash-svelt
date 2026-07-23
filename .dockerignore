@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.svelte-kit
+build
+node_modules
+npm-debug.log*
+Dockerfile*
+README.md
